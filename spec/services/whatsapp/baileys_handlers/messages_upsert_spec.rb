@@ -120,6 +120,36 @@ describe Whatsapp::BaileysHandlers::MessagesUpsert do
         end
       end
 
+      context 'when LID contact_inbox already exists (race condition)' do
+        it 'does not raise unique constraint error and skips the update' do
+          original_contact = create(:contact, account: inbox.account, phone_number: nil, identifier: nil)
+          create(:contact_inbox, inbox: inbox, contact: original_contact, source_id: phone)
+
+          lid_contact = create(:contact, account: inbox.account, phone_number: "+#{phone}", identifier: identifier)
+          create(:contact_inbox, inbox: inbox, contact: lid_contact, source_id: source_id)
+
+          raw_message = {
+            key: { id: 'msg_123', remoteJid: "#{lid}@lid", remoteJidAlt: "#{phone}@s.whatsapp.net", fromMe: false, addressingMode: 'lid' },
+            pushName: 'John Doe',
+            messageTimestamp: timestamp,
+            message: { conversation: 'Hello' }
+          }
+          params = {
+            webhookVerifyToken: webhook_verify_token,
+            event: 'messages.upsert',
+            data: { type: 'notify', messages: [raw_message] }
+          }
+
+          expect do
+            Whatsapp::IncomingMessageBaileysService.new(inbox: inbox, params: params).perform
+          end.not_to raise_error
+
+          message = inbox.messages.last
+          expect(message).to be_present
+          expect(message.sender).to eq(lid_contact)
+        end
+      end
+
       context 'when updating the same contact (no conflict)' do
         it 'successfully updates the contact' do
           contact = create(:contact, account: inbox.account, phone_number: "+#{phone}", identifier: nil)
@@ -145,6 +175,144 @@ describe Whatsapp::BaileysHandlers::MessagesUpsert do
           expect(contact.reload.identifier).to eq(identifier)
           expect(contact.phone_number).to eq("+#{phone}")
         end
+      end
+    end
+  end
+
+  describe 'ephemeral message handling' do
+    let(:phone) { '5511912345678' }
+    let(:lid) { '12345678' }
+
+    context 'when receiving an ephemeral text message' do
+      it 'correctly unwraps and processes the message' do
+        raw_message = {
+          key: { id: 'msg_ephemeral_123', remoteJid: "#{phone}@s.whatsapp.net", remoteJidAlt: "#{lid}@lid", fromMe: false,
+                 addressingMode: 'pn' },
+          pushName: 'Gabriel',
+          messageTimestamp: timestamp,
+          message: {
+            messageContextInfo: {
+              deviceListMetadata: {},
+              deviceListMetadataVersion: 2
+            },
+            ephemeralMessage: {
+              message: {
+                extendedTextMessage: {
+                  text: 'This is a disappearing message',
+                  contextInfo: {
+                    expiration: 604_800,
+                    disappearingMode: { initiator: 0 }
+                  }
+                }
+              }
+            }
+          }
+        }
+        params = {
+          webhookVerifyToken: webhook_verify_token,
+          event: 'messages.upsert',
+          data: { type: 'notify', messages: [raw_message] }
+        }
+
+        expect do
+          Whatsapp::IncomingMessageBaileysService.new(inbox: inbox, params: params).perform
+        end.to change(inbox.messages, :count).by(1)
+
+        message = inbox.messages.last
+        expect(message.content).to eq('This is a disappearing message')
+        expect(message.message_type).to eq('incoming')
+        expect(message.is_unsupported).to be_falsey
+      end
+    end
+
+    context 'when receiving an ephemeral image message' do
+      it 'correctly unwraps and processes the message with media' do
+        raw_message = {
+          key: { id: 'msg_ephemeral_image_123', remoteJid: "#{phone}@s.whatsapp.net", remoteJidAlt: "#{lid}@lid", fromMe: false,
+                 addressingMode: 'pn' },
+          pushName: 'Gabriel',
+          messageTimestamp: timestamp,
+          message: {
+            messageContextInfo: {
+              deviceListMetadata: {},
+              deviceListMetadataVersion: 2
+            },
+            ephemeralMessage: {
+              message: {
+                imageMessage: {
+                  caption: 'Check this out',
+                  mimetype: 'image/jpeg',
+                  url: 'https://example.com/image.jpg'
+                }
+              }
+            }
+          }
+        }
+        params = {
+          webhookVerifyToken: webhook_verify_token,
+          event: 'messages.upsert',
+          data: { type: 'notify', messages: [raw_message] }
+        }
+
+        stub_request(:get, whatsapp_channel.media_url('msg_ephemeral_image_123'))
+          .to_return(status: 200, body: 'fake image data')
+
+        expect do
+          Whatsapp::IncomingMessageBaileysService.new(inbox: inbox, params: params).perform
+        end.to change(inbox.messages, :count).by(1)
+
+        message = inbox.messages.last
+        expect(message.content).to eq('Check this out')
+        expect(message.message_type).to eq('incoming')
+        expect(message.is_unsupported).to be_falsey
+        expect(message.attachments.count).to eq(1)
+      end
+    end
+
+    context 'when receiving an ephemeral reaction message' do
+      it 'correctly unwraps and processes the reaction' do
+        # First create the original message
+        contact = create(:contact, account: inbox.account, phone_number: "+#{phone}", identifier: "#{lid}@lid")
+        contact_inbox = create(:contact_inbox, inbox: inbox, contact: contact, source_id: lid)
+        conversation = create(:conversation, inbox: inbox, contact_inbox: contact_inbox)
+        original_message = create(:message, inbox: inbox, conversation: conversation, source_id: 'original_msg_id')
+
+        raw_message = {
+          key: { id: 'msg_ephemeral_reaction_123', remoteJid: "#{phone}@s.whatsapp.net", remoteJidAlt: "#{lid}@lid", fromMe: false,
+                 addressingMode: 'pn' },
+          pushName: 'Gabriel',
+          messageTimestamp: timestamp,
+          message: {
+            messageContextInfo: {
+              deviceListMetadata: {},
+              deviceListMetadataVersion: 2
+            },
+            ephemeralMessage: {
+              message: {
+                reactionMessage: {
+                  text: '👍',
+                  key: { id: 'original_msg_id' }
+                }
+              }
+            }
+          }
+        }
+        params = {
+          webhookVerifyToken: webhook_verify_token,
+          event: 'messages.upsert',
+          data: { type: 'notify', messages: [raw_message] }
+        }
+
+        expect do
+          Whatsapp::IncomingMessageBaileysService.new(inbox: inbox, params: params).perform
+        end.to change(conversation.messages, :count).by(1)
+
+        reaction = conversation.messages.last
+        expect(reaction.content).to eq('👍')
+        expect(reaction.message_type).to eq('incoming')
+        expect(reaction.content_attributes['is_reaction']).to be_truthy
+        expect(reaction.in_reply_to).to eq(original_message.id)
+        expect(reaction.in_reply_to_external_id).to eq(original_message.source_id)
       end
     end
   end
