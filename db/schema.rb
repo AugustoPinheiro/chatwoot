@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_02_01_162122) do
+ActiveRecord::Schema[7.1].define(version: 2026_02_05_040643) do
   # These extensions should be enabled to support this database
   enable_extension "pg_stat_statements"
   enable_extension "pg_trgm"
@@ -630,9 +630,11 @@ ActiveRecord::Schema[7.1].define(version: 2026_02_01_162122) do
     t.string "country_code", default: ""
     t.boolean "blocked", default: false, null: false
     t.bigint "company_id"
+    t.integer "group_type", default: 0, null: false
     t.index "lower((email)::text), account_id", name: "index_contacts_on_lower_email_account_id"
     t.index ["account_id", "contact_type"], name: "index_contacts_on_account_id_and_contact_type"
     t.index ["account_id", "email", "phone_number", "identifier"], name: "index_contacts_on_nonempty_fields", where: "(((email)::text <> ''::text) OR ((phone_number)::text <> ''::text) OR ((identifier)::text <> ''::text))"
+    t.index ["account_id", "group_type"], name: "index_contacts_on_account_id_and_group_type"
     t.index ["account_id", "last_activity_at"], name: "index_contacts_on_account_id_and_last_activity_at", order: { last_activity_at: "DESC NULLS LAST" }
     t.index ["account_id"], name: "index_contacts_on_account_id"
     t.index ["account_id"], name: "index_resolved_contact_account_id", where: "(((email)::text <> ''::text) OR ((phone_number)::text <> ''::text) OR ((identifier)::text <> ''::text))"
@@ -642,6 +644,18 @@ ActiveRecord::Schema[7.1].define(version: 2026_02_01_162122) do
     t.index ["identifier", "account_id"], name: "uniq_identifier_per_account_contact", unique: true
     t.index ["name", "email", "phone_number", "identifier"], name: "index_contacts_on_name_email_phone_number_identifier", opclass: :gin_trgm_ops, using: :gin
     t.index ["phone_number", "account_id"], name: "index_contacts_on_phone_number_and_account_id"
+  end
+
+  create_table "conversation_group_members", force: :cascade do |t|
+    t.bigint "conversation_id", null: false
+    t.bigint "contact_id", null: false
+    t.integer "role", default: 0, null: false
+    t.boolean "is_active", default: true, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["contact_id"], name: "index_conversation_group_members_on_contact_id"
+    t.index ["conversation_id", "contact_id"], name: "idx_on_conversation_id_contact_id_4eee54a959", unique: true
+    t.index ["conversation_id"], name: "index_conversation_group_members_on_conversation_id"
   end
 
   create_table "conversation_participants", force: :cascade do |t|
@@ -683,6 +697,8 @@ ActiveRecord::Schema[7.1].define(version: 2026_02_01_162122) do
     t.datetime "waiting_since"
     t.text "cached_label_list"
     t.bigint "assignee_agent_bot_id"
+    t.integer "conversation_type", default: 0, null: false
+    t.index ["account_id", "conversation_type"], name: "index_conversations_on_account_id_and_conversation_type"
     t.index ["account_id", "display_id"], name: "index_conversations_on_account_id_and_display_id", unique: true
     t.index ["account_id", "id"], name: "index_conversations_on_id_and_account_id"
     t.index ["account_id", "inbox_id", "status", "assignee_id"], name: "conv_acid_inbid_stat_asgnid_idx"
@@ -693,6 +709,7 @@ ActiveRecord::Schema[7.1].define(version: 2026_02_01_162122) do
     t.index ["contact_inbox_id"], name: "index_conversations_on_contact_inbox_id"
     t.index ["first_reply_created_at"], name: "index_conversations_on_first_reply_created_at"
     t.index ["identifier", "account_id"], name: "index_conversations_on_identifier_and_account_id"
+    t.index ["inbox_id", "conversation_type"], name: "index_conversations_on_inbox_id_and_conversation_type"
     t.index ["inbox_id"], name: "index_conversations_on_inbox_id"
     t.index ["priority"], name: "index_conversations_on_priority"
     t.index ["status", "account_id"], name: "index_conversations_on_status_and_account_id"
@@ -1299,6 +1316,8 @@ ActiveRecord::Schema[7.1].define(version: 2026_02_01_162122) do
 
   add_foreign_key "active_storage_attachments", "active_storage_blobs", column: "blob_id"
   add_foreign_key "active_storage_variant_records", "active_storage_blobs", column: "blob_id"
+  add_foreign_key "conversation_group_members", "contacts"
+  add_foreign_key "conversation_group_members", "conversations"
   add_foreign_key "inboxes", "portals"
   add_foreign_key "scheduled_messages", "accounts"
   add_foreign_key "scheduled_messages", "conversations"
