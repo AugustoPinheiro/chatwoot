@@ -1084,4 +1084,43 @@ RSpec.describe Conversation do
       end
     end
   end
+
+  describe 'conversation_type' do
+    it 'provides type check methods' do
+      individual_conversation = create(:conversation, conversation_type: :individual)
+      group_conversation = create(:conversation, conversation_type: :group)
+
+      expect(individual_conversation).to be_conversation_type_individual
+      expect(group_conversation).to be_conversation_type_group
+    end
+  end
+
+  describe 'group_members association' do
+    it 'returns associated group members' do
+      conversation = create(:conversation, conversation_type: :group)
+      group_member = create(:conversation_group_member, conversation: conversation)
+
+      expect(conversation.group_members).to eq([group_member])
+    end
+  end
+
+  describe 'group_contacts association' do
+    it 'returns contacts through group_members' do
+      conversation = create(:conversation, conversation_type: :group)
+      contact = create(:contact, account: conversation.account)
+      create(:conversation_group_member, conversation: conversation, contact: contact)
+
+      expect(conversation.group_contacts).to eq([contact])
+    end
+
+    it 'returns multiple contacts for group conversations' do
+      conversation = create(:conversation, conversation_type: :group)
+      contact1 = create(:contact, account: conversation.account)
+      contact2 = create(:contact, account: conversation.account)
+      create(:conversation_group_member, conversation: conversation, contact: contact1)
+      create(:conversation_group_member, conversation: conversation, contact: contact2)
+
+      expect(conversation.group_contacts).to contain_exactly(contact1, contact2)
+    end
+  end
 end
