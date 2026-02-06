@@ -117,7 +117,7 @@ class Conversation < ApplicationRecord
   has_many :notifications, as: :primary_actor, dependent: :destroy_async
   has_many :attachments, through: :messages
   has_many :reporting_events, dependent: :destroy_async
-  has_many :scheduled_messages, dependent: :destroy_async
+  has_many :scheduled_messages, dependent: :destroy
   has_many :group_members, class_name: 'ConversationGroupMember', dependent: :destroy_async
   has_many :group_contacts, through: :group_members, source: :contact
 
