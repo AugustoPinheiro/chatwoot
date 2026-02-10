@@ -29,7 +29,4 @@ class ConversationGroupMember < ApplicationRecord
   enum role: { member: 0, admin: 1 }
 
   validates :conversation_id, uniqueness: { scope: :contact_id }
-
-  scope :active, -> { where(is_active: true) }
-  scope :inactive, -> { where(is_active: false) }
 end
