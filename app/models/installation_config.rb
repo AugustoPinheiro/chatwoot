@@ -87,8 +87,8 @@ class InstallationConfig < ApplicationRecord
   def installation_identifier_format
     return if value.blank?
 
-    # UUID v4 format: xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx
-    # where x is any hexadecimal digit and y is one of 8, 9, a, or b
+    # UUID format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+    # where x is any hexadecimal digit (0-9, a-f)
     uuid_regex = /\A[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\z/i
     return if value.match?(uuid_regex)
 
