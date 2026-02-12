@@ -7,6 +7,13 @@ describe ChatwootHub do
     expect(described_class.installation_identifier).to eq installation_identifier
   end
 
+  it 'generates a valid UUID format for installation identifier' do
+    installation_identifier = described_class.installation_identifier
+    # UUID format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx with hex characters only
+    uuid_regex = /\A[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\z/i
+    expect(installation_identifier).to match(uuid_regex)
+  end
+
   context 'when fetching sync_with_hub' do
     it 'get latest version from chatwoot hub' do
       version = '1.1.1'

@@ -44,6 +44,7 @@ class InstallationConfig < ApplicationRecord
   before_validation :set_lock
   validates :name, presence: true
   validate :saml_sso_users_check, if: -> { name == 'ENABLE_SAML_SSO_LOGIN' }
+  validate :installation_identifier_format, if: -> { name == 'INSTALLATION_IDENTIFIER' }
 
   # TODO: Get rid of default scope
   # https://stackoverflow.com/a/1834250/939299
@@ -81,5 +82,16 @@ class InstallationConfig < ApplicationRecord
     return unless User.exists?(provider: 'saml')
 
     errors.add(:base, 'Cannot disable SAML SSO login while users are using SAML authentication')
+  end
+
+  def installation_identifier_format
+    return if value.blank?
+
+    # UUID v4 format: xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx
+    # where x is any hexadecimal digit and y is one of 8, 9, a, or b
+    uuid_regex = /\A[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\z/i
+    return if value.match?(uuid_regex)
+
+    errors.add(:value, 'must be a valid UUID format')
   end
 end
