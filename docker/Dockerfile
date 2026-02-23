@@ -86,14 +86,14 @@ RUN if [ "$RAILS_ENV" = "production" ]; then \
   && rm -rf spec node_modules tmp/cache; \
   fi
 
-# Generate .git_sha file with current commit hash
-RUN git rev-parse HEAD > /app/.git_sha
+# Generate .git_sha file (commit hash or placeholder when not a git repo, e.g. Coolify build)
+RUN (git rev-parse HEAD > /app/.git_sha 2>/dev/null) || echo "build-$(date +%Y%m%d%H%M%S)" > /app/.git_sha
 
 # Remove unnecessary files
 RUN rm -rf /gems/ruby/3.4.0/cache/*.gem \
   && find /gems/ruby/3.4.0/gems/ \( -name "*.c" -o -name "*.o" \) -delete \
   && rm -rf .git \
-  && rm .gitignore
+  && rm -f .gitignore
 
 # final build stage
 FROM ruby:3.4.4-alpine3.21
@@ -128,7 +128,6 @@ RUN apk update && apk add --no-cache \
   imagemagick \
   git \
   vips \
-  ffmpeg \
   && gem install bundler -v "$BUNDLER_VERSION"
 
 COPY --from=node /usr/local/bin/node /usr/local/bin/
