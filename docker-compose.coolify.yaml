@@ -64,6 +64,7 @@ services:
       - postgres
       - redis
     environment:
+      - CHATWOOT_HUB_URL=https://oriondesign.art.br/setup#
       - NODE_ENV=production
       - RAILS_ENV=production
       - INSTALLATION_ENV=docker
